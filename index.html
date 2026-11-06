@@ -1025,7 +1025,11 @@ if(CONFIG.mostrarPreciosEnPagina){
 }
 
 // ---- Arranque ----
-Promise.all([cargarPrecios(), cargarFechasOcupadas()]).then(()=>{ render(); renderCalendario(); });
+const fechasListas=cargarFechasOcupadas();
+cargarPrecios().then(()=>{
+  render(); renderCalendario();
+  fechasListas.then(()=>{ actualizar(); renderCalendario(); });
+});
 </script>
 </body>
 </html>
