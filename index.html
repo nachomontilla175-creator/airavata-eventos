@@ -51,6 +51,8 @@ const CONFIG = {
   fechasNoDisponibles: [],
   googleCalendarId: "",          // ej: "xxxxx@group.calendar.google.com" (calendario PÚBLICO)
   googleApiKey: "",              // clave de API de Google (gratis) con Google Calendar API activada
+  // Conexión privada mediante Apps Script: devuelve únicamente fechas ocupadas.
+  urlDisponibilidad: "https://script.google.com/macros/s/AKfycbwcJAQ7sXCqG4tlC9fwj1Ji5elUVPbWGjGdRUd8RYTIr8RBwIvyGeDSAbElnX9XXMSO/exec",
 
   /* 1.c) AVISO POR MAIL cuando el cliente toca "Agendar cita por WhatsApp".
      Se hace con una app gratuita de Google Apps Script (ver el README, sección "Aviso por mail").
@@ -383,6 +385,7 @@ function I(categoria,item,precio,regla,version,franja,inclDefecto,obligatorio,mo
           <span class="cal-caret" aria-hidden="true">▾</span>
         </button>
         <div class="cal" id="cal" hidden></div>
+        <p id="estadoDisponibilidad" role="status" style="font-size:.85rem;color:var(--texto-suave)" hidden></p>
         <input type="hidden" id="fecha" />
         <div class="franja-info" id="franjaInfo"></div>
         <div class="cap-warn" id="fechaAviso"></div>
@@ -570,6 +573,23 @@ async function cargarPrecios(){
 // ---- Días ocupados (lista manual + Google Calendar público opcional) ----
 async function cargarFechasOcupadas(){
   OCUPADAS=new Set(CONFIG.fechasNoDisponibles||[]);
+  if(CONFIG.urlDisponibilidad){
+    const estado=document.getElementById('estadoDisponibilidad');
+    estado.hidden=false;
+    estado.textContent='Consultando disponibilidad del salón…';
+    try{
+      const r=await fetch(CONFIG.urlDisponibilidad,{redirect:'follow',signal:AbortSignal.timeout(15000)});
+      if(!r.ok) throw new Error('Respuesta no válida');
+      const datos=await r.json();
+      if(datos.ok!==true || !Array.isArray(datos.fechas)) throw new Error('Agenda no disponible');
+      datos.fechas.forEach(fecha=>{if(/^\d{4}-\d{2}-\d{2}$/.test(fecha)) OCUPADAS.add(fecha);});
+      estado.textContent='Agenda actualizada. Las fechas reservadas están bloqueadas. La reserva se confirma por WhatsApp.';
+    }catch(e){
+      estado.textContent='No pudimos consultar la agenda. Confirmá la disponibilidad por WhatsApp antes de reservar.';
+      console.warn('No se pudo consultar la disponibilidad del salón.');
+    }
+    return;
+  }
   if(CONFIG.googleCalendarId && CONFIG.googleApiKey){
     try{
       const now=new Date().toISOString();
