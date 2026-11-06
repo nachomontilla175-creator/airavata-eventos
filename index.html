@@ -164,8 +164,8 @@ const CONFIG = {
     I("Vajilla","Panera",600,"Por mesa","Grande","Todos",false,false,true),
     // --- GASTRONOMÍA / BARRA ---
     I("Gastronomía / Barra","Barra libre (tragos c/s alcohol)",6500,"Por persona","Grande","Todos",false,false,true),
-    I("Gastronomía / Barra","Bartenders (1 cada 50 personas)",75000,"Por cantidad","Grande","Todos",false,false,true),
-    I("Gastronomía / Barra","Parrillero x kg (asador, leña y corte)",3500,"Por kg","Grande","Todos",false,false,true),
+    I("Gastronomía / Barra","Bartenders (1 cada 50 personas)",90000,"Por cantidad","Grande","Todos",false,false,true),
+    I("Gastronomía / Barra","Servicio de parrilla y cocina a la llama",3500,"Por kg","Grande","Todos",false,false,true),
     // --- PERSONAL (precio oculto, suma al total) ---
     I("Personal","Jefe de Cocina",50000,"Fijo","Grande","Todos",false,false,true),
     I("Personal","Ayudante de Cocina",50000,"Por cantidad","Grande","Todos",false,false,true),
@@ -678,9 +678,8 @@ function render(){
         const row=document.createElement('label');
         row.className='item'+((p.obligatorio||p.inclDefecto)?' activo':'')+(p.obligatorio?' bloqueado':'');
         const aCot=esACotizar(p);
-        // El precio base del salón/paquete SÍ se muestra siempre (y cambia solo con la fecha:
-        // Lun a Jue vs Vie a Dom). El resto de los costos van solo en el PDF.
-        const mostrarPrecio = CONFIG.mostrarPreciosEnPagina || p.categoria==='Salon';
+        // Todos los importes se muestran únicamente en el PDF cuando esta opción está desactivada.
+        const mostrarPrecio = CONFIG.mostrarPreciosEnPagina;
         let det;
         if(aCot) det='<span class="acotizar">a cotizar</span>';
         else if(!mostrarPrecio || precioOculto(p)) det='';
@@ -690,6 +689,13 @@ function render(){
         row.innerHTML='<input type="checkbox" data-i="'+gi+'"'+(p.inclDefecto||p.obligatorio?' checked':'')+(p.obligatorio?' disabled':'')+'>'+
                       '<span class="nombre">'+p.item+'</span><span class="precio">'+det+'</span>';
         list.appendChild(row);
+        if(p.item==='Servicio de parrilla y cocina a la llama'){
+          const descripcion=document.createElement('p');
+          descripcion.dataset.parrillaFor=gi;
+          descripcion.style.cssText='margin:0 0 10px;padding:12px 16px;background:var(--fondo);border-radius:12px;color:var(--texto-suave);font-size:.9rem';
+          descripcion.textContent='Parrilla tradicional o cocción a la llama. Incluye leña, servicio de asador, corte y presentación de las carnes. Cotización según los kilos y el servicio elegido.';
+          list.appendChild(descripcion);
+        }
         // Ítem "Por cantidad": el cliente elige cuántas unidades (ej. mozos).
         if(p.regla==='Por cantidad'){
           const sug=sugerirCantidad(p);
@@ -807,7 +813,7 @@ function actualizar(){
   else warn.style.display='none';
   // info de mesas (solo Evento social)
   const mi=document.getElementById('mesasInfo');
-  if(VERSION!=='Infantil' && c.invitados>0){ mi.style.display='block'; mi.textContent='Se arman automáticamente '+c.mesas+' mesa'+(c.mesas===1?'':'s')+' ('+CONFIG.personasPorMesa+' personas por mesa).'; }
+  if(VERSION!=='Infantil' && c.invitados>0){ mi.style.display='block'; mi.textContent='Las mesas se arman automáticamente con '+CONFIG.personasPorMesa+' personas por mesa.'; }
   else mi.style.display='none';
   // día ocupado
   const av=document.getElementById('fechaAviso');
@@ -844,6 +850,10 @@ function actualizar(){
     const a=mp.querySelector('[data-md-wa="'+gi+'"]');
     if(a && md.whatsapp) a.href='https://wa.me/'+md.whatsapp+'?text='+encodeURIComponent(msg);
   });
+  document.querySelectorAll('[data-parrilla-for]').forEach(panel=>{
+    const chk=document.querySelector('#listaItems input[data-i="'+panel.dataset.parrillaFor+'"]');
+    panel.hidden=!(chk&&chk.checked);
+  });
   actualizarWA(c);
 }
 
@@ -868,6 +878,17 @@ document.querySelectorAll('.vbtn').forEach(b=>b.addEventListener('click',()=>{
   b.classList.add('activo'); VERSION=b.dataset.version; render();
 }));
 function onCambio(e){
+  if(e && e.target && e.target.matches('#listaItems input[type=checkbox]') && e.target.checked){
+    const elegido=PRECIOS[e.target.dataset.i];
+    if(elegido && elegido.categoria==='Sonido e iluminación'){
+      const esBasico=p=>p.item==='Básico + luces + animador + DJ';
+      const esProfesional=p=>p.item==='Profesional (DJ se cotiza aparte)'||p.item==='DJ para equipo profesional';
+      document.querySelectorAll('#listaItems input[type=checkbox]').forEach(chk=>{
+        const p=PRECIOS[chk.dataset.i];
+        if(p && ((esBasico(elegido)&&esProfesional(p))||(esProfesional(elegido)&&esBasico(p)))) chk.checked=false;
+      });
+    }
+  }
   if(e && e.target && e.target.id==='fecha' && franjaActual()!==renderedFranja){ render(); return; }
   actualizar();
 }
