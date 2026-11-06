@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIRAVATA — Presupuestos</title>
+
+<!-- jsPDF (genera el PDF). Versión fija desde cdnjs. No hace falta tocar esta línea. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+/* ╔════════════════════════════════════════════════════════════════════════╗
+   ║            👇  CONFIGURACIÓN — EDITÁ SOLO ESTA PARTE  👇                  ║
+   ║  Cambiá lo que está entre comillas. No borres comillas ni comas.         ║
+   ╚════════════════════════════════════════════════════════════════════════╝ */
+
+const CONFIG = {
+
+  /* 1) DATOS DEL LOCAL */
+  nombre: "AIRAVATA",
+  eslogan: "Un espacio diseñado para experiencias memorables",
+  descripcion: "AIRAVATA es un salón de eventos nuevo, con capacidad para hasta 200 personas y " +
+               "300 m² de salón principal. Cuenta con cocina independiente totalmente equipada, " +
+               "climatización para todo el año, barra de tragos moderna, baños con accesibilidad y " +
+               "un entorno natural ideal para tus fotos. El lugar perfecto para fiestas, casamientos, " +
+               "cumpleaños y eventos corporativos. Contanos qué tenés en mente y armamos juntos el presupuesto.",
+  direccion: "Uruguay s/n, Media Agua, San Juan",
+  telefono:  "264 470 8001",
+  email:     "",                 // ⬅️ opcional (dejá "" para no mostrarlo)
+  instagram: "@airavata_eventos", // ⬅️ opcional (ej: "@airavata")
+
+  // CÓMO LLEGAR. googleMapsUrl = adónde lleva el mapa y el botón (tu ubicación en Google Maps).
+  // mapaImagen = la imagen del mapa que se ve en la página (archivo en esta carpeta).
+  googleMapsUrl: "https://maps.app.goo.gl/MXxZY5gbWPAqUYyh8",
+  mapaImagen:    "mapa.png",
+
+  // WhatsApp: 549 + código de área SIN 0 + número SIN 15. Solo números.
+  whatsapp: "5492644708001",     // AIRAVATA (tel 264 470 8001)
+
+  /* 1.b) AGENDA / DISPONIBILIDAD
+     La web puede avisarle al cliente si el día que elige ya está reservado.
+     Hay dos formas (podés usar una o las dos):
+
+     A) MANUAL: escribí acá los días ocupados (formato "AAAA-MM-DD"). Ej:
+        fechasNoDisponibles: ["2026-12-24","2026-12-31"],
+     B) AUTOMÁTICA con tu Google Calendar (gratis):
+        - Creá un calendario aparte (ej. "AIRAVATA reservas") y hacelo PÚBLICO.
+        - Pegá su ID en googleCalendarId y una clave de API de Google en googleApiKey.
+        La web va a marcar como ocupados los días que tengan eventos en ese calendario.
+        (Si los dejás en "", simplemente no se usa esta parte.) */
+  fechasNoDisponibles: [],
+  googleCalendarId: "",          // ej: "xxxxx@group.calendar.google.com" (calendario PÚBLICO)
+  googleApiKey: "",              // clave de API de Google (gratis) con Google Calendar API activada
+
+  /* 1.c) AVISO POR MAIL cuando el cliente toca "Agendar cita por WhatsApp".
+     Se hace con una app gratuita de Google Apps Script (ver el README, sección "Aviso por mail").
+     Pegá acá la URL que te da Apps Script. Vacío ("") = no se envía ningún mail. */
+  urlNotificacion: "",
+
+  /* 2) GALERÍA (reemplazá por tus fotos; podés subirlas a esta carpeta y poner su nombre) */
+  fotos: [
+    { url: "foto1.jpg", texto: "Nuestro salón" },
+    { url: "foto2.jpg", texto: "Salón montado para tu evento" },
+    { url: "foto3.jpg", texto: "Baños amplios y accesibles" },
+    { url: "foto4.jpg", texto: "Airavata, nuestro símbolo" },
+    { url: "foto5.jpg", texto: "Parrillero y espacio exterior" },
+    { url: "foto6.jpg", texto: "Jardín con iluminación" },
+  ],
+
+  /* 3) COMODIDADES (tarjetas de la sección "Nosotros")
+     "icono" usa uno de estos nombres: personas, clima, cocina, barra, accesible,
+     naturaleza, evento, infantil, estacionamiento, seguridad, musica, check. */
+  comodidades: [
+    { icono: "personas", titulo: "Hasta 200 personas", texto: "300 m² de salón principal para tu evento." },
+    { icono: "clima", titulo: "Climatizado", texto: "Dos equipos de aire de 20.000 frigorías." },
+    { icono: "cocina", titulo: "Cocina equipada", texto: "Cocina independiente de 25 m² lista para el servicio." },
+    { icono: "barra", titulo: "Barra de tragos", texto: "Barra moderna con heladera exhibidora." },
+    { icono: "accesible", titulo: "Baños accesibles", texto: "Sanitarios para damas y caballeros, con accesibilidad." },
+    { icono: "naturaleza", titulo: "Entorno natural", texto: "Fondo ambientado, ideal para las fotos." },
+  ],
+
+  /* 4) MONEDA y REGLAS GENERALES */
+  simboloMoneda: "$",
+  capacidadGrande: 200,      // máx. invitados fiesta grande
+  capacidadInfantil: 80,     // invitados que cubre el paquete infantil (arriba de esto, adicionales)
+  personasPorMesa: 8,        // para calcular cuántas mesas (invitados / este número)
+  duracionInfantilHoras: 4,
+  // Si en un infantil hay MÁS personas que el cupo del paquete, las adicionales se suman
+  // al presupuesto. Poné acá el valor por persona adicional (solo número). Si lo dejás
+  // en 0, esas personas aparecen como "a cotizar" (se consultan, no ponen un número).
+  precioPersonaAdicionalInfantil: 0,
+
+  /* 4.b) MESA DULCE (cotización aparte con otro proveedor)
+     Cuando el cliente tilda "Mesa dulce", se le abre un botón de WhatsApp que lo comunica
+     directo con quien arma la mesa dulce, con un mensaje ya escrito (usa el nombre del
+     cliente, el tipo de evento y la cantidad de personas). También puede marcar si quiere
+     tortas. "whatsapp": número del proveedor (54 + 9 + área sin 0 + número sin 15). */
+  mesaDulce: {
+    match: "Mesa dulce",            // a qué ítem se le agrega el panel (por su nombre)
+    whatsapp: "5492645840826",      // +54 9 2645 84-0826
+    preguntarTortas: true,          // mostrar la opción "¿querés también tortas?"
+    // {nombre} {evento} {invitados} se completan solos; {tortas} = frase si pidió tortas
+    plantilla: "¡Hola! Soy {nombre}, queremos festejar el {evento} en AIRAVATA y queremos una cotización de mesa dulce para {invitados} personas.{tortas}"
+  },
+
+  /* 5) PRECIOS DESDE GOOGLE SHEETS (opcional)
+     Si pegás acá el link CSV publicado de tu planilla, la web toma los precios de ahí.
+     Si lo dejás vacío (""), usa los precios internos de más abajo (preciosFallback).
+     Cómo obtener el link: en Google Sheets → Archivo → Compartir → Publicar en la web
+     → elegí la hoja "Precios" y formato CSV → Publicar → copiá el link acá. */
+  urlPreciosCSV: "",
+
+  /* 6) PRECIOS INTERNOS (respaldo y valores por defecto)
+     Reglas: "Fijo" (monto único) | "Por persona" (x invitados) |
+             "Por mesa" (x cantidad de mesas) | "Por cantidad" (el cliente elige cuántas
+             unidades; si el nombre dice "cada N personas" se sugiere la cantidad solo) |
+             "Por kg" / "A cotizar" (se consulta, no suma) |
+             "Incluido" (ya incluido en el paquete, no suma).
+     Version: "Grande" o "Infantil".  Franja: "Todos" | "Lun a Jue" | "Vie a Dom". */
+  preciosFallback: [
+    // --- SALÓN ---
+    I("Salon","Alquiler del salón (Vie a Dom)",500000,"Fijo","Grande","Vie a Dom",true,true,true),
+    I("Salon","Alquiler del salón (Lun a Jue)",400000,"Fijo","Grande","Lun a Jue",true,true,true),
+    I("Salon","Paquete infantil (4 horas) · Lun a Jue",400000,"Fijo","Infantil","Lun a Jue",true,true,true),
+    I("Salon","Paquete infantil (4 horas) · Vie a Dom",450000,"Fijo","Infantil","Vie a Dom",true,true,true),
+    // --- INFANTIL: ya incluido ---
+    I("Incluido (infantil)","Mesas y sillas",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Mantelería y vajilla",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Cocina equipada con horno",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Heladera exhibidora y freezer",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Parrillero",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Limpieza de baños durante el evento",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Caballo mecánico",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Castillo inflable o plaza blanda",0,"Incluido","Infantil","Todos",true,true,true),
+    I("Incluido (infantil)","Metegol",0,"Incluido","Infantil","Todos",true,true,true),
+    // --- INFANTIL: opcionales (a cotizar) ---
+    I("Opcionales (infantil)","Mesa dulce",0,"A cotizar","Infantil","Todos",false,false,true),
+    I("Opcionales (infantil)","Candy bar",0,"A cotizar","Infantil","Todos",false,false,true),
+    I("Opcionales (infantil)","Mozos (1 cada 25 personas)",60000,"Por cantidad","Infantil","Todos",false,false,true),
+    I("Opcionales (infantil)","Barra de bebidas",0,"A cotizar","Infantil","Todos",false,false,true),
+    // --- EVENTO SOCIAL: servicios obligatorios ---
+    I("Servicios obligatorios","Servicio de higiene de sanitarios",40000,"Fijo","Grande","Todos",true,true,true),
+    I("Servicios obligatorios","Jefe de Salón",50000,"Fijo","Grande","Todos",true,true,true),
+    // --- MOBILIARIO (precio oculto, suma al total; se calcula por persona o por mesa) ---
+    I("Mobiliario","Sillas tipo Tiffany de metal",2000,"Por persona","Grande","Todos",true,false,true),
+    I("Mobiliario","Almohadón para silla Tiffany",500,"Por persona","Grande","Todos",false,false,true),
+    I("Mobiliario","Cubresilla blanco o negro",700,"Por persona","Grande","Todos",true,false,true),
+    I("Mobiliario","Cintas para sillas",350,"Por persona","Grande","Todos",true,false,true),
+    I("Mobiliario","Mesa redonda (1 cada 8 personas)",3000,"Por mesa","Grande","Todos",true,false,true),
+    I("Mobiliario","Mantel",3000,"Por mesa","Grande","Todos",false,false,true),
+    I("Mobiliario","Caminito",700,"Por mesa","Grande","Todos",false,false,true),
+    // --- VAJILLA (precio oculto, suma al total; por persona o por mesa) ---
+    I("Vajilla","Copa de agua",290,"Por persona","Grande","Todos",true,false,true),
+    I("Vajilla","Plato",400,"Por persona","Grande","Todos",true,false,true),
+    I("Vajilla","Tenedor",190,"Por persona","Grande","Todos",true,false,true),
+    I("Vajilla","Cuchillo",190,"Por persona","Grande","Todos",true,false,true),
+    I("Vajilla","Servilleta de tela",220,"Por persona","Grande","Todos",false,false,true),
+    I("Vajilla","Cucharita de postre",160,"Por persona","Grande","Todos",false,false,true),
+    I("Vajilla","Copa de vino",390,"Por persona","Grande","Todos",false,false,true),
+    I("Vajilla","Copa de champaña",400,"Por persona","Grande","Todos",false,false,true),
+    I("Vajilla","Copa de postre",270,"Por persona","Grande","Todos",false,false,true),
+    I("Vajilla","Jarra de vidrio",1000,"Por mesa","Grande","Todos",false,false,true),
+    I("Vajilla","Hielera con pinza",1000,"Por mesa","Grande","Todos",false,false,true),
+    I("Vajilla","Panera",600,"Por mesa","Grande","Todos",false,false,true),
+    // --- GASTRONOMÍA / BARRA ---
+    I("Gastronomía / Barra","Barra libre (tragos c/s alcohol)",6500,"Por persona","Grande","Todos",false,false,true),
+    I("Gastronomía / Barra","Bartenders (1 cada 50 personas)",75000,"Por cantidad","Grande","Todos",false,false,true),
+    I("Gastronomía / Barra","Parrillero x kg (asador, leña y corte)",3500,"Por kg","Grande","Todos",false,false,true),
+    // --- PERSONAL (precio oculto, suma al total) ---
+    I("Personal","Jefe de Cocina",50000,"Fijo","Grande","Todos",false,false,true),
+    I("Personal","Ayudante de Cocina",50000,"Por cantidad","Grande","Todos",false,false,true),
+    I("Personal","Recepción femenina",40000,"Por cantidad","Grande","Todos",false,false,true),
+    I("Personal","Mozos (1 cada 25 personas)",60000,"Por cantidad","Grande","Todos",false,false,true),
+    I("Personal","Seguridad en ingreso",50000,"Fijo","Grande","Todos",false,false,true),
+    // --- SONIDO E ILUMINACIÓN (dos opciones) ---
+    I("Sonido e iluminación","Profesional (DJ se cotiza aparte)",350000,"Fijo","Grande","Todos",false,false,true),
+    I("Sonido e iluminación","DJ para equipo profesional",0,"A cotizar","Grande","Todos",false,false,true),
+    I("Sonido e iluminación","Básico + luces + animador + DJ",200000,"Fijo","Grande","Todos",false,false,true),
+  ],
+
+  // Categorías cuyos precios NO se muestran al cliente, pero SÍ se suman al total.
+  // (Ej: el personal.) Agregá o quitá nombres de categoría.
+  categoriasSinPrecio: ["Personal", "Vajilla", "Mobiliario"],
+
+  // ¿Mostrar precios en la PÁGINA? false = la página no muestra ningún precio ni el
+  // total; los costos aparecen SOLO en el PDF que el cliente descarga al final.
+  mostrarPreciosEnPagina: false,
+
+  colorPrincipal: "#6a2ca8",   // violeta de la marca AIRAVATA (tomado del logo)
+};
+
+// Helper para escribir cada precio de forma corta (no tocar).
+function I(categoria,item,precio,regla,version,franja,inclDefecto,obligatorio,mostrar){
+  return { categoria, item, precio, regla, version, franja, inclDefecto, obligatorio, mostrar };
+}
+/* ╔══════════  FIN DE LA CONFIGURACIÓN — no toques nada de acá para abajo  ══════════╗ */
+</script>
+
+<style>
+  :root{
+    --primario:#6a2ca8; --primario-oscuro:#421d80; --texto:#1f2430; --texto-suave:#5b6270;
+    --fondo:#f6f5fb; --tarjeta:#fff; --borde:#e6e4f0; --ok:#16a34a;
+    --sombra:0 6px 24px rgba(40,20,80,.08); --radio:16px;
+  }
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--texto);background:var(--fondo);line-height:1.55}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(rgba(246,245,251,.78),rgba(246,245,251,.82)),url('fondo.jpg') center/cover;}
+  img{max-width:100%;display:block} h1,h2,h3{line-height:1.2;margin:0 0 .4em} a{color:var(--primario)}
+  .contenedor{max-width:860px;margin:0 auto;padding:0 16px}
+  section{padding:34px 0} section h2{font-size:clamp(1.3rem,5vw,1.8rem);text-align:center;margin-bottom:.6em}
+
+  .nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--borde)}
+  .nav-logo{font-weight:800;font-size:1.1rem;text-decoration:none;color:var(--primario);letter-spacing:.5px}
+  .nav-links{display:flex;gap:6px;flex-wrap:wrap}
+  .nav-links a{text-decoration:none;color:var(--texto-suave);font-weight:600;font-size:.9rem;padding:6px 10px;border-radius:9px}
+  .nav-links a:hover{color:var(--primario);background:rgba(124,58,237,.08)}
+  @media(max-width:480px){.nav{flex-direction:column;gap:6px;padding:10px 12px}.nav-links a{padding:5px 8px;font-size:.84rem}}
+
+  header.hero{background:linear-gradient(135deg,rgba(106,44,168,.82),rgba(66,29,128,.9)),url('fondo.jpg') center 28%/cover;color:#fff;padding:46px 20px 54px;text-align:center}
+  header.hero h1{font-size:clamp(2rem,7vw,3.4rem);margin-bottom:.2em;letter-spacing:1px}
+  header.hero p{font-size:clamp(1rem,3.5vw,1.25rem);opacity:.95;margin:0}
+  .hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+  .btn-hero{text-decoration:none;font-weight:700;font-size:1rem;padding:13px 24px;border-radius:13px;transition:transform .08s,filter .15s}
+  .btn-hero:active{transform:scale(.97)} .btn-hero.primario{background:#fff;color:var(--primario-oscuro)}
+  .btn-hero.secundario{background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.6)}
+  .btn-hero:hover{filter:brightness(1.05)}
+
+  .galeria{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .galeria figure{margin:0;border-radius:var(--radio);overflow:hidden;box-shadow:var(--sombra);background:var(--tarjeta);cursor:zoom-in}
+  .galeria img{width:100%;height:170px;object-fit:cover}
+  .galeria figcaption{padding:8px 12px;font-size:.85rem;color:var(--texto-suave);text-align:center}
+  .descripcion{background:var(--tarjeta);border-radius:var(--radio);padding:22px;box-shadow:var(--sombra);color:var(--texto-suave)}
+  .comodidades{display:grid;gap:12px;margin-top:18px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+  .comodidad{background:var(--tarjeta);border-radius:var(--radio);padding:16px 18px;box-shadow:var(--sombra);border:1px solid var(--borde)}
+  .comodidad .ico{color:var(--primario);line-height:0}.comodidad .ico svg{width:30px;height:30px}.comodidad h3{font-size:1.02rem;margin:6px 0 2px}.comodidad p{margin:0;color:var(--texto-suave);font-size:.9rem}
+
+  .tarjeta{background:var(--tarjeta);border-radius:var(--radio);padding:22px;box-shadow:var(--sombra)}
+  label.campo{display:block;margin-bottom:16px;font-weight:600;font-size:.95rem}
+  label.campo span.sub{display:block;font-weight:400;color:var(--texto-suave);font-size:.82rem;margin-top:2px}
+  input[type=text],input[type=tel],input[type=email],input[type=number],input[type=date],select{width:100%;margin-top:6px;padding:12px 14px;font-size:1rem;border:1.5px solid var(--borde);border-radius:11px;background:#fff;color:var(--texto);-webkit-appearance:none}
+  input:focus,select:focus{outline:none;border-color:var(--primario);box-shadow:0 0 0 3px rgba(124,58,237,.15)}
+
+  /* selector de versión */
+  .versiones{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .vbtn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px 10px;border:2px solid var(--borde);border-radius:14px;background:#fff;cursor:pointer;font-weight:700;color:var(--texto);transition:border-color .15s,background .15s}
+  .vbtn .emoji{display:inline-flex;color:var(--primario)}.vbtn .emoji svg{width:30px;height:30px}.vbtn small{font-weight:500;color:var(--texto-suave);font-size:.78rem}
+  .vbtn.activo{border-color:var(--primario);background:rgba(124,58,237,.06)}
+
+  .franja-info{font-size:.85rem;color:var(--primario-oscuro);background:rgba(124,58,237,.08);border-radius:10px;padding:8px 12px;margin:-6px 0 16px}
+  .cap-warn{font-size:.85rem;color:#b45309;background:#fef3c7;border-radius:10px;padding:8px 12px;margin:-6px 0 16px;display:none}
+  .cap-warn.ok-info{color:var(--primario-oscuro);background:rgba(124,58,237,.08)}
+
+  /* Calendario */
+  .cal-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 10px;padding:12px 14px;font-size:1rem;font-weight:600;color:var(--texto);background:#fff;border:1.5px solid var(--borde);border-radius:11px;cursor:pointer;text-align:left}
+  .cal-toggle:hover{border-color:var(--primario)}
+  .cal-toggle[aria-expanded="true"]{border-color:var(--primario);box-shadow:0 0 0 3px rgba(124,58,237,.15)}
+  .cal-toggle .cal-caret{color:var(--primario);transition:transform .18s;font-size:.9rem}
+  .cal-toggle[aria-expanded="true"] .cal-caret{transform:rotate(180deg)}
+  .cal{border:1.5px solid var(--borde);border-radius:12px;padding:12px;margin:6px 0 16px;background:#fff}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .cal-head button{border:none;background:rgba(124,58,237,.1);color:var(--primario);width:34px;height:34px;border-radius:9px;font-size:1.2rem;line-height:1;cursor:pointer}
+  .cal-head button:hover{filter:brightness(.97)}
+  .cal-mes{font-weight:700;text-transform:capitalize}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .cal-dow{text-align:center;font-size:.72rem;color:var(--texto-suave);font-weight:700;padding:2px 0}
+  .cal-dia{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;border-radius:9px;font-size:.9rem;cursor:pointer}
+  .cal-dia:hover{background:rgba(124,58,237,.1)}
+  .cal-dia.vacio{visibility:hidden;cursor:default}
+  .cal-dia.deshab{color:#cbd5e1;cursor:not-allowed;background:transparent}
+  .cal-dia.ocupado{color:#dc2626;background:#fee2e2;cursor:not-allowed;text-decoration:line-through}
+  .cal-dia.sel{background:var(--primario);color:#fff;font-weight:700}
+  .cal-ref{display:flex;gap:14px;flex-wrap:wrap;font-size:.74rem;color:var(--texto-suave);margin-top:10px}
+  .cal-ref span{display:inline-flex;align-items:center;gap:5px}
+  .cal-ref i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  .grupo{margin-top:14px}
+  .grupo h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.5px;color:var(--texto-suave);margin:0 0 8px}
+  .items{display:grid;gap:10px}
+  .item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid var(--borde);border-radius:12px;cursor:pointer;transition:border-color .15s,background .15s}
+  .item:hover{border-color:var(--primario)} .item.activo{border-color:var(--primario);background:rgba(124,58,237,.05)}
+  .item input{width:20px;height:20px;accent-color:var(--primario);flex:none}
+  .item .nombre{flex:1;font-weight:600} .item .precio{color:var(--texto-suave);font-size:.9rem;white-space:nowrap;text-align:right}
+  .item.bloqueado{cursor:default}
+  .incluye{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{background:rgba(22,163,74,.08);color:#166534;border:1px solid rgba(22,163,74,.25);border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:600}
+  .acotizar{color:#b45309;font-size:.82rem;font-weight:700}
+  .cantidad-ctrl{display:none;align-items:center;flex-wrap:wrap;gap:8px;margin:-2px 2px 4px;padding:10px 12px;background:rgba(124,58,237,.05);border:1px dashed var(--borde);border-radius:11px;font-size:.9rem;font-weight:600;color:var(--texto-suave)}
+  .cantidad-ctrl input[type=number]{width:72px;margin-top:0;padding:8px 10px;text-align:center;font-weight:700}
+  .cantidad-ctrl .qbtn{width:34px;height:34px;flex:none;border:1.5px solid var(--borde);background:#fff;color:var(--primario);border-radius:9px;font-size:1.2rem;line-height:1;cursor:pointer}
+  .cantidad-ctrl .qbtn:hover{border-color:var(--primario)}
+  .cantidad-ctrl .qhint{flex-basis:100%;font-weight:400;font-size:.78rem;color:var(--texto-suave)}
+  .cantidad-ctrl .qsel{flex-basis:100%;font-weight:700;font-size:.85rem;color:var(--ok)}
+  .cantidad-ctrl .qsel:empty{display:none}
+  .mesadulce-panel{display:none;margin:-2px 2px 4px;padding:12px 14px;background:rgba(124,58,237,.05);border:1px dashed var(--borde);border-radius:11px}
+  .mesadulce-panel .md-torta{display:flex;align-items:center;gap:8px;font-size:.92rem;font-weight:600;color:var(--texto);margin-bottom:10px;cursor:pointer}
+  .mesadulce-panel .md-torta input{width:18px;height:18px;accent-color:var(--primario)}
+  .mesadulce-panel .btn-md{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 16px;background:#25D366;color:#fff;font-weight:700;border-radius:11px;text-decoration:none}
+  .mesadulce-panel .btn-md:hover{filter:brightness(1.06)}
+  .mesadulce-panel .btn-md svg{width:18px;height:18px}
+  .mesadulce-panel small{display:block;margin-top:8px;font-size:.76rem;color:var(--texto-suave)}
+
+  .total-caja{position:sticky;bottom:0;margin-top:20px;background:linear-gradient(135deg,var(--primario),var(--primario-oscuro));color:#fff;border-radius:var(--radio);padding:18px 22px;box-shadow:var(--sombra);text-align:center}
+  .total-caja .label{font-size:.9rem;opacity:.9}.total-caja .monto{font-size:clamp(1.8rem,7vw,2.4rem);font-weight:800;letter-spacing:-1px}
+  .total-caja .nota{font-size:.78rem;opacity:.9;margin-top:4px}
+  .total-caja .monto.sinmonto{font-size:1.1rem;font-weight:700;line-height:1.4}
+  .botones{display:grid;gap:12px;margin-top:18px}@media(min-width:560px){.botones{grid-template-columns:1fr 1fr}}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:15px 18px;font-size:1.02rem;font-weight:700;border:none;border-radius:13px;cursor:pointer;text-decoration:none;transition:transform .08s,filter .15s}
+  .btn:active{transform:scale(.98)}.btn-pdf{background:var(--texto);color:#fff}.btn-wa{background:#25D366;color:#fff}.btn:hover{filter:brightness(1.07)}
+  .bico{display:inline-flex;align-items:center}.bico svg{width:20px;height:20px}
+  .aviso{font-size:.82rem;color:var(--texto-suave);text-align:center;margin-top:14px}
+  .campos-cliente{margin-top:24px}
+
+  footer{background:#211a35;color:#d9d5ea;padding:30px 16px 40px;text-align:center;margin-top:20px}
+  footer h3{color:#fff}footer a{color:#c4b5fd}footer .datos{display:grid;gap:6px;font-size:.95rem;margin-top:8px}footer .mini{font-size:.78rem;opacity:.6;margin-top:18px}
+  .mapa-wrap{max-width:560px;margin:16px auto 0}
+  .mapa{display:block;border-radius:14px;overflow:hidden;box-shadow:var(--sombra);line-height:0;border:1px solid rgba(255,255,255,.12)}
+  .mapa img{width:100%;height:auto;display:block}
+  .mapa-attr{font-size:.68rem;color:#d9d5ea;opacity:.5;margin-top:5px}
+  .btn-mapa{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:12px 22px;background:var(--primario);color:#fff;font-weight:700;border-radius:12px;text-decoration:none}
+  .btn-mapa:hover{filter:brightness(1.08)}.btn-mapa svg{width:18px;height:18px}
+
+  .lightbox{position:fixed;inset:0;z-index:100;background:rgba(15,10,30,.9);display:flex;align-items:center;justify-content:center;padding:20px}
+  .lightbox[hidden]{display:none}.lightbox img{max-width:100%;max-height:90vh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  .lightbox-cerrar{position:absolute;top:16px;right:18px;width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;background:rgba(255,255,255,.15);color:#fff;font-size:1.2rem}
+</style>
+</head>
+
+<body>
+  <nav class="nav">
+    <a class="nav-logo" href="#inicio" id="nav-nombre">AIRAVATA</a>
+    <div class="nav-links">
+      <a href="#salon">Nosotros</a><a href="#fotos">Fotos</a><a href="#presupuesto">Presupuesto</a><a href="#contacto">Contacto</a>
+    </div>
+  </nav>
+
+  <header class="hero" id="inicio">
+    <h1 id="h-nombre">AIRAVATA</h1>
+    <p id="h-eslogan"></p>
+    <div class="hero-cta">
+      <a class="btn-hero primario" href="#presupuesto">Pedí tu presupuesto</a>
+      <a class="btn-hero secundario" href="#fotos">Ver las fotos</a>
+    </div>
+  </header>
+
+  <section id="salon">
+    <div class="contenedor">
+      <h2>Nosotros</h2>
+      <div class="descripcion" id="descripcion"></div>
+      <div class="comodidades" id="comodidades"></div>
+    </div>
+  </section>
+
+  <section id="fotos">
+    <div class="contenedor">
+      <h2>Fotos</h2>
+      <div class="galeria" id="galeria"></div>
+    </div>
+  </section>
+
+  <section id="presupuesto">
+    <div class="contenedor">
+      <h2>Armá tu presupuesto</h2>
+      <div class="tarjeta">
+
+        <!-- 1) Elegir versión -->
+        <label class="campo" style="margin-bottom:8px;">¿Qué tipo de evento es?</label>
+        <div class="versiones">
+          <button type="button" class="vbtn activo" data-version="Grande">
+            <span class="emoji" data-ico="evento"></span>Evento social<small>Casamientos, 15, cumple, corporativo</small>
+          </button>
+          <button type="button" class="vbtn" data-version="Infantil">
+            <span class="emoji" data-ico="infantil"></span>Infantil<small>Cumple de chicos · hasta 80 · 4 h</small>
+          </button>
+        </div>
+
+        <label class="campo">Motivo del evento
+          <select id="tipoEvento"></select>
+        </label>
+
+        <label class="campo" style="margin-bottom:8px;">Fecha tentativa</label>
+        <button type="button" class="cal-toggle" id="calToggle" aria-expanded="false">
+          <span class="cal-toggle-txt" id="calToggleTxt">Elegí la fecha</span>
+          <span class="cal-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="cal" id="cal" hidden></div>
+        <input type="hidden" id="fecha" />
+        <div class="franja-info" id="franjaInfo"></div>
+        <div class="cap-warn" id="fechaAviso"></div>
+
+        <label class="campo">Cantidad de invitados
+          <input type="number" id="invitados" min="1" step="1" value="50" inputmode="numeric" />
+        </label>
+        <div class="cap-warn" id="capWarn"></div>
+        <div class="franja-info" id="mesasInfo"></div>
+
+        <div id="listaItems"></div>
+
+        <div class="campos-cliente">
+          <label class="campo" style="margin-bottom:8px;">Tus datos</label>
+          <label class="campo" style="font-weight:400;"><input type="text" id="clienteNombre" placeholder="Nombre y apellido" /></label>
+          <label class="campo" style="font-weight:400;"><input type="tel" id="clienteTel" placeholder="Teléfono / WhatsApp" /></label>
+          <label class="campo" style="font-weight:400;"><input type="email" id="clienteEmail" placeholder="Email (opcional)" /></label>
+        </div>
+
+        <div class="total-caja">
+          <!-- Por defecto NO se muestra ningún valor (los costos van solo en el PDF).
+               Si en la CONFIG ponés mostrarPreciosEnPagina:true, el JS de abajo
+               repone la etiqueta "Total estimado" y el monto. -->
+          <div class="label" id="totalLabel" style="display:none">Total estimado</div>
+          <div class="monto sinmonto" id="total">📄 Descargá tu presupuesto en PDF para ver el detalle y el total</div>
+          <div class="nota" id="totalNota">Los precios se muestran en el presupuesto PDF que descargás al final. El total es estimativo y se confirma en la cita.</div>
+        </div>
+
+        <div class="botones">
+          <button class="btn btn-pdf" id="btnPDF" type="button"><span class="bico" data-ico="descargar"></span>Descargar presupuesto (PDF)</button>
+          <a class="btn btn-wa" id="btnWA" href="#"><span class="bico" data-ico="chat"></span>Agendar cita por WhatsApp</a>
+        </div>
+        <p class="aviso">El presupuesto es estimativo y no constituye una reserva. Agendá una cita para confirmar disponibilidad y precios finales.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer id="contacto">
+    <h3>Contacto</h3>
+    <div class="datos" id="datosContacto"></div>
+    <div class="mapa-wrap" id="mapaWrap"></div>
+    <p class="mini">AIRAVATA · <span id="anio"></span></p>
+  </footer>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lightbox-cerrar" id="lightbox-cerrar" aria-label="Cerrar">✕</button>
+    <img id="lightbox-img" src="" alt="" />
+  </div>
+
+<script>
+document.documentElement.style.setProperty('--primario', CONFIG.colorPrincipal);
+const fmt = n => CONFIG.simboloMoneda + Math.round(n).toLocaleString('es-AR');
+
+// ---- Íconos de línea (SVG, estilo profesional) ----
+function S(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
+const ICONOS = {
+  personas: S('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  clima: S('<line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/>'),
+  cocina: S('<path d="M3 2v7c0 1.1.9 2 2 2a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Z"/><path d="M21 15v7"/>'),
+  barra: S('<path d="M8 22h8"/><path d="M12 11v11"/><path d="m19 3-7 8-7-8Z"/>'),
+  accesible: S('<circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 3.5"/><path d="M4.24 14.5a5 5 0 0 0 6.88 6"/><path d="M13.76 17.5a5 5 0 0 0-6.88-6"/>'),
+  naturaleza: S('<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>'),
+  estacionamiento: S('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>'),
+  seguridad: S('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>'),
+  musica: S('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
+  evento: S('<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>'),
+  infantil: S('<path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v2"/><path d="M12 8v2"/><path d="M17 8v2"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/>'),
+  descargar: S('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>'),
+  chat: S('<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>'),
+  check: S('<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>'),
+  mapa: S('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'),
+};
+function svgIcon(k){ return ICONOS[k] || ICONOS.check; }
+// ¿este ítem se consulta y NO suma? (a cotizar)
+function esACotizar(p){ return p.regla==='A cotizar' || p.regla==='Por kg'; }
+// ¿se oculta el precio al cliente pero SÍ se suma al total?
+function precioOculto(p){ return (CONFIG.categoriasSinPrecio||[]).includes(p.categoria); }
+// "Por cantidad": el cliente elige cuántas unidades. Si el nombre dice "cada N
+// personas" (ej. "Mozos (1 cada 25 personas)"), se usa ese N para sugerir la
+// cantidad automáticamente según los invitados. Si no, 1 por persona.
+function cadaCuantas(p){ if(p.cadaPersonas) return p.cadaPersonas; const m=(p.item||'').match(/cada\s+(\d+)/i); return m?parseInt(m[1],10):null; }
+function sugerirCantidad(p){ const n=cadaCuantas(p); if(!n) return 1; const inv=Math.max(0,parseInt(inpInvitados.value,10)||0); return Math.max(1,Math.ceil(inv/n)); }
+function hintCantidad(p){ const n=cadaCuantas(p); return n?('sugerido '+sugerirCantidad(p)+' (1 cada '+n+' personas)'):'elegí la cantidad que necesites'; }
+// nombre de la unidad para el texto "Solicitás N ..." (sin el paréntesis), en minúscula
+function nombreUnidad(p){ return (p.item||'').replace(/\s*\(.*?\)\s*/g,'').trim().toLowerCase(); }
+// ¿este ítem tiene cotización aparte de mesa dulce (otro proveedor por WhatsApp)?
+function esMesaDulce(p){ const m=CONFIG.mesaDulce&&CONFIG.mesaDulce.match; return !!m && (p.item||'').toLowerCase().includes(m.toLowerCase()); }
+
+// ---- Datos del local ----
+document.getElementById('h-nombre').textContent = CONFIG.nombre;
+document.getElementById('nav-nombre').textContent = CONFIG.nombre;
+document.getElementById('h-eslogan').textContent = CONFIG.eslogan;
+document.getElementById('descripcion').textContent = CONFIG.descripcion;
+document.title = CONFIG.nombre + " — Presupuestos";
+document.getElementById('anio').textContent = new Date().getFullYear();
+
+const contCom = document.getElementById('comodidades');
+(CONFIG.comodidades||[]).forEach(c=>{
+  const d=document.createElement('div'); d.className='comodidad';
+  d.innerHTML='<div class="ico">'+svgIcon(c.icono)+'</div><h3>'+c.titulo+'</h3><p>'+(c.texto||'')+'</p>';
+  contCom.appendChild(d);
+});
+
+const galeria=document.getElementById('galeria');
+CONFIG.fotos.forEach(f=>{
+  const fig=document.createElement('figure');
+  fig.innerHTML='<img src="'+f.url+'" alt="'+(f.texto||'')+'" loading="lazy">'+(f.texto?'<figcaption>'+f.texto+'</figcaption>':'');
+  fig.querySelector('img').addEventListener('click',()=>abrirLightbox(f.url,f.texto||''));
+  galeria.appendChild(fig);
+});
+const lightbox=document.getElementById('lightbox'), lightboxImg=document.getElementById('lightbox-img');
+function abrirLightbox(u,a){lightboxImg.src=u;lightboxImg.alt=a;lightbox.hidden=false;}
+function cerrarLightbox(){lightbox.hidden=true;lightboxImg.src='';}
+document.getElementById('lightbox-cerrar').addEventListener('click',cerrarLightbox);
+lightbox.addEventListener('click',e=>{if(e.target===lightbox)cerrarLightbox();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')cerrarLightbox();});
+
+const datosContacto=document.getElementById('datosContacto');
+const linea=(t,h)=>!t?'':(h?'<div><a href="'+h+'">'+t+'</a></div>':'<div>'+t+'</div>');
+datosContacto.innerHTML =
+  linea(CONFIG.direccion)+
+  linea(CONFIG.telefono,'tel:'+String(CONFIG.telefono).replace(/[^0-9+]/g,''))+
+  linea(CONFIG.email,CONFIG.email?'mailto:'+CONFIG.email:'')+
+  linea(CONFIG.instagram?'Instagram '+CONFIG.instagram:'',CONFIG.instagram?'https://instagram.com/'+CONFIG.instagram.replace('@',''):'');
+
+// ---- Cómo llegar (imagen de mapa + botón a Google Maps) ----
+(function(){
+  const wrap=document.getElementById('mapaWrap'); if(!wrap) return;
+  const href=CONFIG.googleMapsUrl||'';
+  let h='';
+  if(CONFIG.mapaImagen){
+    h+='<a class="mapa"'+(href?(' href="'+href+'" target="_blank" rel="noopener" title="Abrir en Google Maps"'):'')+'>'+
+         '<img src="'+CONFIG.mapaImagen+'" alt="Cómo llegar a '+CONFIG.nombre+' — '+(CONFIG.direccion||'')+'" loading="lazy">'+
+       '</a><div class="mapa-attr">Mapa © OpenStreetMap</div>';
+  }
+  if(href) h+='<a class="btn-mapa" href="'+href+'" target="_blank" rel="noopener">'+svgIcon('mapa')+'<span>Cómo llegar</span></a>';
+  wrap.innerHTML=h;
+})();
+
+// ---- Motivo del evento ----
+const selTipo=document.getElementById('tipoEvento');
+["Cumpleaños","Cumpleaños de 15","Casamiento","Corporativo / Empresa","Aniversario","Egresados","Otro"]
+  .forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;selTipo.appendChild(o);});
+
+// ---- Estado ----
+let VERSION='Grande';
+let PRECIOS=CONFIG.preciosFallback;
+let renderedFranja=null;
+let OCUPADAS=new Set();
+const inpInvitados=document.getElementById('invitados');
+const inpFecha=document.getElementById('fecha');
+const elTotal=document.getElementById('total');
+
+// ---- Carga de precios (CSV de Google Sheets o respaldo interno) ----
+function parseCSV(txt){
+  const rows=[]; let f='',row=[],q=false;
+  for(let i=0;i<txt.length;i++){const c=txt[i];
+    if(q){ if(c==='"'){ if(txt[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else { if(c==='"')q=true; else if(c===','){row.push(f);f='';}
+      else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';}
+      else if(c==='\r'){} else f+=c; } }
+  if(f.length||row.length){row.push(f);rows.push(row);}
+  return rows.filter(r=>r.length>1);
+}
+async function cargarPrecios(){
+  if(!CONFIG.urlPreciosCSV) return;
+  try{
+    const r=await fetch(CONFIG.urlPreciosCSV);
+    const rows=parseCSV(await r.text());
+    const head=rows[0].map(h=>h.trim());
+    const ix=n=>head.indexOf(n);
+    const si=v=>/^s/i.test((v||'').trim());
+    const items=rows.slice(1).filter(r=>r[ix('Item')]).map(r=>({
+      categoria:r[ix('Categoria')], item:r[ix('Item')],
+      precio:parseFloat(String(r[ix('Precio')]||'0').replace(/[^\d.-]/g,''))||0,
+      regla:(r[ix('Regla')]||'').trim(), version:(r[ix('Version')]||'').trim(),
+      franja:(r[ix('Franja')]||'Todos').trim(),
+      inclDefecto:si(r[ix('Incluido por defecto')]), obligatorio:si(r[ix('Obligatorio')]),
+      mostrar:si(r[ix('Mostrar al cliente')])
+    }));
+    if(items.length) PRECIOS=items;
+  }catch(e){ console.warn('No se pudo leer el CSV online; uso precios internos.',e); }
+}
+
+// ---- Días ocupados (lista manual + Google Calendar público opcional) ----
+async function cargarFechasOcupadas(){
+  OCUPADAS=new Set(CONFIG.fechasNoDisponibles||[]);
+  if(CONFIG.googleCalendarId && CONFIG.googleApiKey){
+    try{
+      const now=new Date().toISOString();
+      const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(CONFIG.googleCalendarId)+
+                '/events?key='+CONFIG.googleApiKey+'&timeMin='+encodeURIComponent(now)+'&singleEvents=true&maxResults=2500&orderBy=startTime';
+      const j=await (await fetch(url)).json();
+      (j.items||[]).forEach(ev=>{
+        if(!ev.start) return;
+        const ini=(ev.start.date||ev.start.dateTime||'').slice(0,10);
+        if(!ini) return;
+        if(ev.start.date && ev.end && ev.end.date){ // todo el día (puede ser varios días; el fin es exclusivo)
+          let cur=new Date(ini+'T00:00'); const fin=new Date(ev.end.date+'T00:00');
+          while(cur<fin){ OCUPADAS.add(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+        } else { OCUPADAS.add(ini); }
+      });
+    }catch(e){ console.warn('No se pudo leer el calendario de Google; uso solo la lista manual.',e); }
+  }
+}
+
+// ---- Fecha → franja ----
+function franjaDeFecha(iso){
+  if(!iso) return null;
+  const wd=new Date(iso+'T00:00').getDay(); // 0=Dom ... 6=Sab
+  return (wd>=1 && wd<=4) ? 'Lun a Jue' : 'Vie a Dom';
+}
+function franjaActual(){ return franjaDeFecha(inpFecha.value) || 'Vie a Dom'; }
+
+// ---- Calendario mensual visible ----
+const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DOW=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+let calMes=new Date(); calMes.setDate(1);
+let fechaSel='';
+const hoyISO=()=>new Date().toISOString().slice(0,10);
+const isoDe=(y,m,d)=>y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+function seleccionarFecha(iso){
+  fechaSel=iso; inpFecha.value=iso;
+  if(franjaActual()!==renderedFranja) render(); else actualizar();
+  renderCalendario();
+  abrirCalendario(false);     // al elegir, se cierra el desplegable
+}
+// ---- Calendario desplegable (abrir / cerrar) ----
+function textoFecha(){
+  const t=document.getElementById('calToggleTxt'); if(!t) return;
+  t.textContent = inpFecha.value ? ('📅 '+fechaAR(inpFecha.value)) : 'Elegí la fecha';
+}
+function abrirCalendario(abrir){
+  const cal=document.getElementById('cal'), btn=document.getElementById('calToggle');
+  if(!cal||!btn) return;
+  cal.hidden = !abrir;
+  btn.setAttribute('aria-expanded', abrir?'true':'false');
+  textoFecha();
+}
+document.getElementById('calToggle').addEventListener('click',()=>{
+  abrirCalendario(document.getElementById('cal').hidden);
+});
+function renderCalendario(){
+  const cont=document.getElementById('cal'); if(!cont) return;
+  const y=calMes.getFullYear(), m=calMes.getMonth(), hoy=hoyISO();
+  let h='<div class="cal-head"><button type="button" id="calPrev" aria-label="Mes anterior">‹</button>'+
+        '<span class="cal-mes">'+MESES[m]+' '+y+'</span>'+
+        '<button type="button" id="calNext" aria-label="Mes siguiente">›</button></div><div class="cal-grid">';
+  DOW.forEach(d=>h+='<div class="cal-dow">'+d+'</div>');
+  let primer=new Date(y,m,1).getDay(); primer=(primer===0?6:primer-1);
+  for(let i=0;i<primer;i++) h+='<div class="cal-dia vacio"></div>';
+  const dias=new Date(y,m+1,0).getDate();
+  for(let d=1;d<=dias;d++){
+    const iso=isoDe(y,m,d); let cls='cal-dia'; const pasado=iso<hoy, ocupado=OCUPADAS.has(iso);
+    if(pasado) cls+=' deshab'; else if(ocupado) cls+=' ocupado';
+    if(iso===fechaSel) cls+=' sel';
+    const dis=pasado||ocupado;
+    h+='<div class="'+cls+'"'+(dis?'':' data-iso="'+iso+'"')+'>'+d+'</div>';
+  }
+  h+='</div><div class="cal-ref"><span><i style="background:var(--primario)"></i>Elegido</span>'+
+     '<span><i style="background:#fee2e2;border:1px solid #fca5a5"></i>Reservado</span></div>';
+  cont.innerHTML=h;
+  document.getElementById('calPrev').onclick=()=>{calMes.setMonth(calMes.getMonth()-1);renderCalendario();};
+  document.getElementById('calNext').onclick=()=>{calMes.setMonth(calMes.getMonth()+1);renderCalendario();};
+  cont.querySelectorAll('.cal-dia[data-iso]').forEach(el=>el.onclick=()=>seleccionarFecha(el.dataset.iso));
+}
+
+// ---- Render de ítems según versión ----
+function itemsVisibles(){
+  const fr=franjaActual();
+  return PRECIOS.filter(p=>p.version===VERSION && p.mostrar)
+    .filter(p=>{ if(p.categoria==='Salon') return p.franja===fr; return true; });
+}
+function render(){
+  renderedFranja=franjaActual();
+  const cont=document.getElementById('listaItems'); cont.innerHTML='';
+  const items=itemsVisibles();
+  const cats=[]; items.forEach(p=>{ if(!cats.includes(p.categoria)) cats.push(p.categoria); });
+  cats.forEach(cat=>{
+    const g=document.createElement('div'); g.className='grupo';
+    g.innerHTML='<h3>'+cat+'</h3>';
+    const incluidos=items.filter(p=>p.categoria===cat && p.regla==='Incluido');
+    const resto=items.filter(p=>p.categoria===cat && p.regla!=='Incluido');
+    if(incluidos.length){
+      const box=document.createElement('div'); box.className='incluye';
+      incluidos.forEach(p=>{ const s=document.createElement('span'); s.className='chip'; s.textContent='✓ '+p.item; box.appendChild(s); });
+      g.appendChild(box);
+    }
+    if(resto.length){
+      const list=document.createElement('div'); list.className='items';
+      resto.forEach(p=>{
+        const gi=PRECIOS.indexOf(p);
+        const row=document.createElement('label');
+        row.className='item'+((p.obligatorio||p.inclDefecto)?' activo':'')+(p.obligatorio?' bloqueado':'');
+        const aCot=esACotizar(p);
+        // El precio base del salón/paquete SÍ se muestra siempre (y cambia solo con la fecha:
+        // Lun a Jue vs Vie a Dom). El resto de los costos van solo en el PDF.
+        const mostrarPrecio = CONFIG.mostrarPreciosEnPagina || p.categoria==='Salon';
+        let det;
+        if(aCot) det='<span class="acotizar">a cotizar</span>';
+        else if(!mostrarPrecio || precioOculto(p)) det='';
+        else if(p.regla==='Por persona') det=fmt(p.precio)+' x persona';
+        else if(p.regla==='Por mesa') det=fmt(p.precio)+' x mesa';
+        else det=fmt(p.precio);
+        row.innerHTML='<input type="checkbox" data-i="'+gi+'"'+(p.inclDefecto||p.obligatorio?' checked':'')+(p.obligatorio?' disabled':'')+'>'+
+                      '<span class="nombre">'+p.item+'</span><span class="precio">'+det+'</span>';
+        list.appendChild(row);
+        // Ítem "Por cantidad": el cliente elige cuántas unidades (ej. mozos).
+        if(p.regla==='Por cantidad'){
+          const sug=sugerirCantidad(p);
+          const qc=document.createElement('div'); qc.className='cantidad-ctrl'; qc.dataset.ctrlFor=gi;
+          qc.innerHTML='<span>¿Cuántos?</span>'+
+            '<button type="button" class="qbtn" data-step="-1" data-qty-for="'+gi+'">−</button>'+
+            '<input type="number" min="1" step="1" value="'+sug+'" data-qty="'+gi+'" inputmode="numeric">'+
+            '<button type="button" class="qbtn" data-step="1" data-qty-for="'+gi+'">+</button>'+
+            '<small class="qhint" data-hint="'+gi+'">'+hintCantidad(p)+'</small>'+
+            '<span class="qsel" data-sel="'+gi+'"></span>';
+          list.appendChild(qc);
+        }
+        // Ítem con cotización aparte (mesa dulce): panel con WhatsApp al proveedor.
+        if(esMesaDulce(p)){
+          const md=CONFIG.mesaDulce||{};
+          const mp=document.createElement('div'); mp.className='mesadulce-panel'; mp.dataset.mdFor=gi;
+          mp.innerHTML=
+            (md.preguntarTortas?'<label class="md-torta"><input type="checkbox" data-md-tortas="'+gi+'"> ¿Querés también tortas?</label>':'')+
+            '<a class="btn-md" data-md-wa="'+gi+'" target="_blank" rel="noopener">'+svgIcon('chat')+'<span>Pedir cotización de mesa dulce</span></a>'+
+            '<small>Te comunicamos por WhatsApp con quien arma la mesa dulce. Usa tu nombre y la cantidad de personas.</small>';
+          list.appendChild(mp);
+        }
+      });
+      g.appendChild(list);
+    }
+    cont.appendChild(g);
+  });
+  actualizar();
+}
+
+// ---- Cálculo ----
+function calcular(){
+  const invitados=Math.max(0,parseInt(inpInvitados.value,10)||0);
+  const mesas=CONFIG.personasPorMesa>0?Math.ceil(invitados/CONFIG.personasPorMesa):0;
+  let total=0; const detalle=[]; const aCotizar=[];
+  document.querySelectorAll('#listaItems input[type=checkbox]').forEach(chk=>{
+    const p=PRECIOS[chk.dataset.i]; if(!p) return;
+    const activo=p.obligatorio||chk.checked;
+    chk.closest('.item').classList.toggle('activo',activo);
+    if(!activo) return;
+    if(esACotizar(p)){ aCotizar.push(p.item); detalle.push({nombre:p.item,texto:'a cotizar',sub:0}); return; }
+    let sub=0,txt='';
+    if(p.regla==='Por persona'){ sub=p.precio*invitados; txt=fmt(p.precio)+' x '+invitados; }
+    else if(p.regla==='Por mesa'){ sub=p.precio*mesas; txt=fmt(p.precio)+' x '+mesas+' mesas'; }
+    else if(p.regla==='Por cantidad'){
+      const qi=document.querySelector('[data-qty="'+chk.dataset.i+'"]');
+      const qty=Math.max(1,parseInt(qi&&qi.value,10)||1);
+      sub=p.precio*qty; txt=fmt(p.precio)+' x '+qty;
+    }
+    else { sub=p.precio; txt=''; }
+    total+=sub; detalle.push({nombre:p.item,texto:txt,sub:sub});
+  });
+  // Infantil: si hay más invitados que la capacidad del paquete, sumamos las personas adicionales.
+  // El valor por persona adicional sale "del ya presupuestado": se prorratea el precio del
+  // paquete (precio del paquete ÷ capacidad). Se puede fijar otro valor en precioPersonaAdicionalInfantil.
+  let extraInfantil=0;
+  if(VERSION==='Infantil' && invitados>CONFIG.capacidadInfantil){
+    extraInfantil=invitados-CONFIG.capacidadInfantil;
+    let pu=CONFIG.precioPersonaAdicionalInfantil||0;
+    if(!pu){
+      const base=PRECIOS.find(p=>p.version==='Infantil'&&p.categoria==='Salon'&&p.franja===franjaActual());
+      if(base&&base.precio&&CONFIG.capacidadInfantil>0) pu=base.precio/CONFIG.capacidadInfantil;
+    }
+    if(pu>0){ const sub=Math.round(pu*extraInfantil); total+=sub; detalle.push({nombre:'Personas adicionales sobre el paquete ('+extraInfantil+')',texto:fmt(Math.round(pu))+' x '+extraInfantil,sub:sub}); }
+    else { aCotizar.push(extraInfantil+' persona'+(extraInfantil===1?'':'s')+' adicional'+(extraInfantil===1?'':'es')); detalle.push({nombre:'Personas adicionales sobre el paquete ('+extraInfantil+')',texto:'a cotizar',sub:0}); }
+  }
+  // ítems incluidos (infantil) para mostrar en PDF
+  const incluidos=itemsVisibles().filter(p=>p.regla==='Incluido').map(p=>p.item);
+  return {invitados,mesas,total,detalle,aCotizar,incluidos,extraInfantil};
+}
+function datosCliente(){
+  return {
+    nombre:document.getElementById('clienteNombre').value.trim(),
+    tel:document.getElementById('clienteTel').value.trim(),
+    email:document.getElementById('clienteEmail').value.trim(),
+    tipo:selTipo.value, fecha:inpFecha.value?fechaAR(inpFecha.value):'A definir'
+  };
+}
+const fechaAR=iso=>{const p=iso.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:iso;};
+
+function actualizar(){
+  const c=calcular();
+  let nota;
+  if(!CONFIG.mostrarPreciosEnPagina){
+    nota='Los precios se muestran en el presupuesto PDF que descargás al final. El total es estimativo y se confirma en la cita.';
+    if(c.aCotizar.length) nota+=' Opcionales a cotizar aparte: '+c.aCotizar.join(', ')+'.';
+  } else {
+    elTotal.textContent=fmt(c.total);
+    nota='* Valor estimativo. Se confirma en la cita.';
+    if(VERSION==='Infantil' && c.aCotizar.length) nota='* Estimativo. Opcionales ('+c.aCotizar.join(', ')+') a cotizar aparte.';
+    else if(c.aCotizar.length) nota='* Estimativo. Además: '+c.aCotizar.join(', ')+' (a cotizar).';
+  }
+  document.getElementById('totalNota').textContent=nota;
+  // franja
+  const fr=franjaActual();
+  document.getElementById('franjaInfo').textContent =
+    (inpFecha.value?('Tarifa aplicada: '+fr):('Elegí la fecha. Por defecto se muestra tarifa '+fr))+
+    (VERSION==='Infantil'?(' · paquete '+CONFIG.duracionInfantilHoras+' h'):'');
+  // capacidad
+  const max=VERSION==='Infantil'?CONFIG.capacidadInfantil:CONFIG.capacidadGrande;
+  const warn=document.getElementById('capWarn');
+  if(c.invitados>max){
+    warn.style.display='block';
+    if(VERSION==='Infantil'){
+      const extra=c.extraInfantil||(c.invitados-max);
+      warn.classList.add('ok-info');
+      warn.innerHTML='✨ ¡Genial que sean tantos! El paquete infantil está pensado para hasta '+max+' personas. '+
+        'Sumamos las <b>'+extra+'</b> persona'+(extra===1?'':'s')+' adicional'+(extra===1?'':'es')+' al presupuesto, '+
+        'calculada'+(extra===1?'':'s')+' a partir del valor ya presupuestado del paquete, y se reflejan en el total del PDF.';
+    } else {
+      warn.classList.remove('ok-info');
+      warn.textContent='Van a ser '+c.invitados+' personas (más de '+max+'): lo coordinamos a tu medida, dejanos tus datos y lo armamos juntos.';
+    }
+  }
+  else warn.style.display='none';
+  // info de mesas (solo Evento social)
+  const mi=document.getElementById('mesasInfo');
+  if(VERSION!=='Infantil' && c.invitados>0){ mi.style.display='block'; mi.textContent='Se arman automáticamente '+c.mesas+' mesa'+(c.mesas===1?'':'s')+' ('+CONFIG.personasPorMesa+' personas por mesa).'; }
+  else mi.style.display='none';
+  // día ocupado
+  const av=document.getElementById('fechaAviso');
+  if(inpFecha.value && OCUPADAS.has(inpFecha.value)){ av.style.display='block'; av.textContent='⚠️ Ese día ya está reservado. Por favor elegí otra fecha.'; }
+  else av.style.display='none';
+  // controles "¿cuántos?" (Por cantidad): se muestran solo si el ítem está tildado,
+  // y la sugerencia se actualiza con los invitados mientras el cliente no la haya tocado.
+  document.querySelectorAll('.cantidad-ctrl').forEach(qc=>{
+    const gi=qc.dataset.ctrlFor; const p=PRECIOS[gi];
+    const chk=document.querySelector('#listaItems input[type=checkbox][data-i="'+gi+'"]');
+    const activo=p && (p.obligatorio || (chk&&chk.checked));
+    qc.style.display=activo?'flex':'none';
+    if(!p) return;
+    const qi=qc.querySelector('[data-qty="'+gi+'"]'); const sug=sugerirCantidad(p);
+    const hint=qc.querySelector('[data-hint="'+gi+'"]'); if(hint) hint.textContent=hintCantidad(p);
+    if(qi && qi.dataset.touched!=='1') qi.value=sug;
+    const sel=qc.querySelector('[data-sel="'+gi+'"]');
+    if(sel){ const qty=Math.max(1,parseInt(qi&&qi.value,10)||1); sel.textContent=activo?('✓ Solicitás '+qty+' '+nombreUnidad(p)):''; }
+  });
+  // paneles de mesa dulce (cotización aparte con otro proveedor por WhatsApp)
+  document.querySelectorAll('.mesadulce-panel').forEach(mp=>{
+    const gi=mp.dataset.mdFor;
+    const chk=document.querySelector('#listaItems input[type=checkbox][data-i="'+gi+'"]');
+    const activo=chk&&chk.checked;
+    mp.style.display=activo?'block':'none';
+    if(!activo) return;
+    const md=CONFIG.mesaDulce||{}; const d=datosCliente();
+    const tortas=mp.querySelector('[data-md-tortas="'+gi+'"]'); const quiereTortas=tortas&&tortas.checked;
+    const msg=(md.plantilla||'')
+      .replace('{nombre}', d.nombre||'(tu nombre)')
+      .replace('{evento}', (d.tipo||'evento'))
+      .replace('{invitados}', c.invitados)
+      .replace('{tortas}', quiereTortas?' Además, nos interesan las tortas.':'');
+    const a=mp.querySelector('[data-md-wa="'+gi+'"]');
+    if(a && md.whatsapp) a.href='https://wa.me/'+md.whatsapp+'?text='+encodeURIComponent(msg);
+  });
+  actualizarWA(c);
+}
+
+function actualizarWA(c){
+  const d=datosCliente();
+  let m='¡Hola '+CONFIG.nombre+'! Quiero agendar una cita para un evento.\n\n';
+  m+='• Tipo: '+(VERSION==='Infantil'?'Infantil':'Evento social')+'\n';
+  m+='• Motivo: '+d.tipo+'\n';
+  m+='• Fecha tentativa: '+d.fecha+'\n';
+  m+='• Invitados: '+c.invitados+'\n';
+  if(CONFIG.mostrarPreciosEnPagina) m+='• Total estimado: '+fmt(c.total)+'\n';
+  if(c.aCotizar.length) m+='• A cotizar: '+c.aCotizar.join(', ')+'\n';
+  if(d.nombre) m+='• Mi nombre: '+d.nombre+'\n';
+  if(d.tel) m+='• Mi teléfono: '+d.tel+'\n';
+  m+='\nMe gustaría coordinar una cita. ¡Gracias!';
+  document.getElementById('btnWA').href='https://wa.me/'+CONFIG.whatsapp+'?text='+encodeURIComponent(m);
+}
+
+// ---- Eventos ----
+document.querySelectorAll('.vbtn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.vbtn').forEach(x=>x.classList.remove('activo'));
+  b.classList.add('activo'); VERSION=b.dataset.version; render();
+}));
+function onCambio(e){
+  if(e && e.target && e.target.id==='fecha' && franjaActual()!==renderedFranja){ render(); return; }
+  actualizar();
+}
+document.getElementById('presupuesto').addEventListener('input',e=>{
+  if(e.target.matches('[data-qty]')) e.target.dataset.touched='1';  // el cliente eligió la cantidad a mano
+  if(e.target.id==='fecha'||e.target.closest('#listaItems')||e.target.id==='invitados'||e.target.id==='clienteNombre'||e.target.id==='clienteTel') onCambio(e);
+});
+document.getElementById('presupuesto').addEventListener('change',onCambio);
+// Botones − / + de los ítems "Por cantidad" (ej. mozos)
+document.getElementById('presupuesto').addEventListener('click',e=>{
+  const b=e.target.closest('.qbtn'); if(!b) return;
+  const gi=b.dataset.qtyFor; const qi=document.querySelector('[data-qty="'+gi+'"]'); if(!qi) return;
+  qi.value=Math.max(1,(parseInt(qi.value,10)||1)+parseInt(b.dataset.step,10));
+  qi.dataset.touched='1'; actualizar();
+});
+
+// Aviso por mail al dueño cuando el cliente confirma la cita (toca el botón de WhatsApp).
+document.getElementById('btnWA').addEventListener('click',()=>enviarAviso(calcular()));
+function enviarAviso(c){
+  if(!CONFIG.urlNotificacion) return;
+  const d=datosCliente();
+  try{
+    fetch(CONFIG.urlNotificacion,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({tipo:(VERSION==='Infantil'?'Infantil':'Evento social'),motivo:d.tipo,fecha:d.fecha,
+        invitados:c.invitados,totalTexto:fmt(c.total),aCotizar:c.aCotizar,nombre:d.nombre,tel:d.tel,email:d.email})});
+  }catch(e){ console.warn('No se pudo enviar el aviso por mail',e); }
+}
+
+// ---- PDF ----
+function hexRgb(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');return[parseInt(h.substr(0,2),16)||0,parseInt(h.substr(2,2),16)||0,parseInt(h.substr(4,2),16)||0];}
+document.getElementById('btnPDF').addEventListener('click',()=>{
+  const c=calcular(), d=datosCliente(); const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'}); const W=doc.internal.pageSize.getWidth(); const M=48; let y=56;
+  const rgb=hexRgb(CONFIG.colorPrincipal);
+  doc.setFillColor(rgb[0],rgb[1],rgb[2]); doc.rect(0,0,W,90,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.text(CONFIG.nombre,M,52);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text('Presupuesto estimativo · '+(VERSION==='Infantil'?'Evento infantil':'Evento social'),M,72);
+  y=128; doc.setTextColor(30,30,30);
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.text('Datos del evento',M,y); y+=20;
+  doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  const fila=(k,v)=>{doc.text(k+': '+v,M,y);y+=17;};
+  fila('Fecha de emisión',fechaAR(new Date().toISOString().slice(0,10)));
+  fila('Motivo',d.tipo); fila('Fecha tentativa',d.fecha);
+  fila('Tarifa',franjaActual()+(VERSION==='Infantil'?(' · '+CONFIG.duracionInfantilHoras+' h'):''));
+  fila('Cantidad de invitados',String(c.invitados));
+  if(d.nombre) fila('Cliente',d.nombre); if(d.tel) fila('Teléfono',d.tel); if(d.email) fila('Email',d.email);
+  y+=6;
+  if(c.incluidos.length){
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text('Incluye',M,y); y+=16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text(doc.splitTextToSize('• '+c.incluidos.join('   • '),W-M*2),M,y); y+=14*Math.ceil(c.incluidos.length/2)+6;
+  }
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.text('Detalle',M,y); y+=8;
+  doc.setDrawColor(220,220,220); doc.line(M,y,W-M,y); y+=20; doc.setFontSize(11);
+  c.detalle.forEach(it=>{
+    doc.setFont('helvetica','normal');
+    doc.text(it.nombre+(it.texto?('  ('+it.texto+')'):''),M,y);
+    var montoTxt = it.sub>0?fmt(it.sub):(it.texto==='a cotizar'?'a cotizar':'-');
+    doc.text(montoTxt,W-M,y,{align:'right'});
+    y+=18; if(y>740){doc.addPage();y=60;}
+  });
+  y+=6; doc.line(M,y,W-M,y); y+=24;
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('TOTAL ESTIMADO',M,y); doc.text(fmt(c.total),W-M,y,{align:'right'}); y+=30;
+  doc.setFont('helvetica','italic'); doc.setFontSize(9.5); doc.setTextColor(110,110,110);
+  let nota='* Presupuesto estimativo, no constituye reserva. Los valores finales se confirman en una cita.';
+  if(c.aCotizar.length) nota+=' Opcionales a cotizar: '+c.aCotizar.join(', ')+'.';
+  doc.text(doc.splitTextToSize(nota,W-M*2),M,y); y+=46;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(60,60,60);
+  const ct=[]; if(CONFIG.direccion)ct.push(CONFIG.direccion); if(CONFIG.telefono)ct.push('Tel: '+CONFIG.telefono);
+  if(CONFIG.email)ct.push(CONFIG.email); if(CONFIG.instagram)ct.push('IG: '+CONFIG.instagram);
+  doc.text(ct.join('   ·   '),M,y);
+  entregarPDF(doc,'Presupuesto-'+(d.nombre?d.nombre.replace(/\s+/g,'-'):'AIRAVATA')+'.pdf');
+});
+
+// Descarga robusta del PDF en todos lados:
+//  - Dentro del visor de Claude (el enlace claude.ai), el navegador bloquea la descarga
+//    directa; ahí usamos la "capability" de descargas de Claude (muestra un confirmar).
+//  - En un navegador normal / GitHub Pages (el sitio publicado), descarga directa; y si algo
+//    falla, abrimos el PDF en una pestaña nueva como respaldo.
+async function entregarPDF(doc,filename){
+  // 1) Visor de Claude: capability de descargas
+  try{
+    if(window.claude && typeof window.claude.use==='function'){
+      const downloads=await window.claude.use('downloads');
+      if(downloads){
+        try{ await downloads.save({filename, data: doc.output('blob')}); return; }
+        catch(e){ if(e && e.code==='declined') return; } // si lo rechazó, no insistimos
+      }
+    }
+  }catch(e){}
+  // 2) Navegador normal / sitio publicado: descarga directa
+  try{ doc.save(filename); return; }catch(e){}
+  // 3) Respaldos: abrir el PDF en una pestaña nueva / link de descarga
+  try{ const w=window.open(doc.output('bloburl'),'_blank'); if(w) return; }catch(e){}
+  try{
+    const url=doc.output('bloburl');
+    const a=document.createElement('a'); a.href=url; a.download=filename; a.rel='noopener';
+    document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),3000); return;
+  }catch(e){}
+  alert('No pudimos abrir el PDF en este navegador. Probá desde Chrome/Safari actualizado o escribinos por WhatsApp y te lo pasamos.');
+}
+
+// Rellenar los íconos de los botones estáticos (versión, PDF, WhatsApp)
+document.querySelectorAll('[data-ico]').forEach(el=>{ el.innerHTML=svgIcon(el.dataset.ico); });
+
+// La caja del total arranca (en el HTML) SIN valor: muestra la invitación al PDF.
+// Si activás mostrarPreciosEnPagina:true, reponemos la etiqueta y el monto.
+if(CONFIG.mostrarPreciosEnPagina){
+  document.getElementById('totalLabel').style.display='';
+  elTotal.classList.remove('sinmonto');
+  elTotal.textContent='$0';
+}
+
+// ---- Arranque ----
+Promise.all([cargarPrecios(), cargarFechasOcupadas()]).then(()=>{ render(); renderCalendario(); });
+</script>
+</body>
+</html>
